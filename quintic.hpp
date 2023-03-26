@@ -7,11 +7,22 @@ public:
 	double x;
 	double y;
 	
+	complex() : x(0), y(0) {}
+	
+	// Initialize from a real
+	complex(double x) : x(x), y(0) {}
+	
+	// Initialize from complex
 	complex(double x, double y) : x(x), y(y) {}
 	
 	// Take the conjugate (invert the imaginary component)
 	complex operator~() const {
 		return complex(x, -y);
+	}
+	
+	// Negate
+	complex operator-() const {
+		return complex(-x, -y);
 	}
 	
 	// Multiply by a real number.
@@ -65,6 +76,15 @@ public:
 		
 		return dx*dx + dy*dy;
 	}
+	
+	void debug() {
+		if (y < 0) {
+			printf("(%.2f - %.2fi)", x, -y);
+		}
+		else {
+			printf("(%.2f + %.2fi)", x, y);
+		}
+	}
 };
 
 // Quick & dirty rgb class.
@@ -81,28 +101,34 @@ public:
 class quintic {
 public:
 	// Coefficients (y = ax^5 + bx^4 + cx^3 + dx^2 + ex + f)
-	double a;
-	double b;
-	double c;
-	double d;
-	double e;
-	double f;
+	complex a;
+	complex b;
+	complex c;
+	complex d;
+	complex e;
+	complex f;
 	
 	// Cefficients of the derivative (y = 5ax^4 + 4bx^3 + 3cx^2 + 2dx + e = dax^4 + dbx^3 + dcx^2 + ddx + de)
-	double da;
-	double db;
-	double dc;
-	double dd;
-	double de; // Equal to e, kind of redundant.
+	complex da;
+	complex db;
+	complex dc;
+	complex dd;
+	complex de; // Equal to e, kind of redundant.
+	
+	// Construct from a list of 5 roots.
+	quintic(complex* rots);
 	
 	// Constructs quintic and takes its derivative
-	quintic(double a, double b, double c, double d, double e, double f);
+	quintic(complex a, complex b, complex c, complex d, complex e, complex f);
 	
 	// Evaluate function at the passed complex point x + yi
 	complex eval(const complex& val);
 	
 	// Evaluate the derivative at the passed complex point x + yi
 	complex der_eval(const complex& val);
+	
+	// Prints the quintic
+	void debug();
 };
 
 #include "quintic.cpp"

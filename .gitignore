@@ -1,3 +1,6 @@
 *.exe
 *.ppm
 *.png
+*.mp4
+*.lib
+*.exp
