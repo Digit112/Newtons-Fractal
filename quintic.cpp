@@ -1,5 +1,5 @@
 // Geenerate a quintic with the given roots. Coefficient a will always be 1.
-quintic::quintic(complex* roots) : a(1), b(0), c(0), d(0), e(0), f(0) {
+quintic::quintic(const complex* roots) : a(1), b(0), c(0), d(0), e(0), f(0) {
 	// Calculate b
 	for (int i = 0; i < 5; i++) {
 		b = b - roots[i];
@@ -35,6 +35,7 @@ quintic::quintic(complex* roots) : a(1), b(0), c(0), d(0), e(0), f(0) {
 	// Calculate f
 	f = -roots[0] * roots[1] * roots[2] * roots[3] * roots[4];
 	
+	// Take the derivative.
 	da = a*5;
 	db = b*4;
 	dc = c*3;

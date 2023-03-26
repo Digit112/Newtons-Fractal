@@ -1,19 +1,19 @@
-#ifndef QUINTIC
-#define QUINTIC
+#ifndef NEWTON_QUINTIC
+#define NEWTON_QUINTIC
 
 // Quick & dirty complex number class
 class complex {
 public:
-	double x;
-	double y;
+	float x;
+	float y;
 	
 	complex() : x(0), y(0) {}
 	
 	// Initialize from a real
-	complex(double x) : x(x), y(0) {}
+	complex(float x) : x(x), y(0) {}
 	
 	// Initialize from complex
-	complex(double x, double y) : x(x), y(y) {}
+	complex(float x, float y) : x(x), y(y) {}
 	
 	// Take the conjugate (invert the imaginary component)
 	complex operator~() const {
@@ -26,7 +26,7 @@ public:
 	}
 	
 	// Multiply by a real number.
-	complex operator*(const double& val) const {
+	complex operator*(const float& val) const {
 		return complex(x*val, y*val);
 	}
 	
@@ -36,7 +36,7 @@ public:
 	}
 	
 	// Add to a real number
-	complex operator+(const double& val) const {
+	complex operator+(const float& val) const {
 		return complex(x + val, y);
 	}
 	
@@ -51,7 +51,7 @@ public:
 	}
 	
 	// Divide by a real number.
-	complex operator/(const double& val) const {
+	complex operator/(const float& val) const {
 		return complex(x / val, y / val);
 	}
 	
@@ -116,7 +116,7 @@ public:
 	complex de; // Equal to e, kind of redundant.
 	
 	// Construct from a list of 5 roots.
-	quintic(complex* rots);
+	quintic(const complex* roots);
 	
 	// Constructs quintic and takes its derivative
 	quintic(complex a, complex b, complex c, complex d, complex e, complex f);
