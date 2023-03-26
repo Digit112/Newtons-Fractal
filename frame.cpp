@@ -20,21 +20,18 @@ int main() {
 	
 	// Colors for each root.
 	rgb colors[5] = {rgb(30, 161, 206), rgb(56, 83, 141), rgb(73, 12, 87), rgb(87, 186, 97), rgb(24, 133, 142)};
+	complex roots[5] = {complex(-1.325, 0), complex(0.662, 0.562), complex(0.662, -0.562), complex(0, 1), complex(0, -1)};
 	
 	// Allocate space for the output files' names and headers.
 	char fn[64];
-	char hdr[64];
 	
-	for (int f = 46; f < frames; f++) {
+	for (int f = 0; f < frames; f++) {
 		printf("Frame %d...\n", f);
 		
 		float t = (float) f / frames * 2 * 3.14159;
 		
-		// Define the roots
-		complex roots[5] = {complex(sin(t) - 0.325, 0), complex(0.662, 0.562), complex(0.662, -0.562), complex(0, 1), complex(0, -1)};
-		
 		// Render
-		cam.render(roots, colors, iters);
+		cam.render(roots, colors, iters, sin(t));
 		
 		// Save to file.
 		sprintf(fn, "./out/%03d.ppm", f);

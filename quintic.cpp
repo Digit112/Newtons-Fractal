@@ -47,7 +47,22 @@ quintic::quintic(complex a, complex b, complex c, complex d, complex e, complex 
 	a(a), b(b), c(c), d(d), e(e), f(f),
 	da(a*5), db(b*4), dc(c*3), dd(d*2), de(e) {}
 
-complex quintic::eval(const complex& val) {
+void quintic::scale(complex val) {
+	a = a * val;
+	b = b * val;
+	c = c * val;
+	d = d * val;
+	e = e * val;
+	f = f * val;
+	
+	da = da * val;
+	db = db * val;
+	dc = dc * val;
+	dd = dd * val;
+	de = e;
+}
+
+complex quintic::eval(const complex& val) const {
 	complex temp = val;
 	complex ret = temp*e + f;
 	
@@ -64,7 +79,7 @@ complex quintic::eval(const complex& val) {
 	return ret + temp*a;
 }
 
-complex quintic::der_eval(const complex& val) {
+complex quintic::der_eval(const complex& val) const {
 	complex temp = val;
 	complex ret = temp*dd + de;
 	

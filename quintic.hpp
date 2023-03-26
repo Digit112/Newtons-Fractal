@@ -32,28 +32,25 @@ public:
 	complex de; // Equal to e, kind of redundant.
 	
 	// Construct from a list of 5 roots.
-	#ifdef GPU_ENABLED
-	__device__ __host__
-	#endif
 	quintic(const complex* roots);
 	
 	// Constructs quintic and takes its derivative
-	#ifdef GPU_ENABLED
-	__device__ __host__
-	#endif
 	quintic(complex a, complex b, complex c, complex d, complex e, complex f);
+	
+	// Multiply the entire quintic by a constant.
+	void scale(complex val);
 	
 	// Evaluate function at the passed complex point x + yi
 	#ifdef GPU_ENABLED
 	__device__ __host__
 	#endif
-	complex eval(const complex& val);
+	complex eval(const complex& val) const;
 	
 	// Evaluate the derivative at the passed complex point x + yi
 	#ifdef GPU_ENABLED
 	__device__ __host__
 	#endif
-	complex der_eval(const complex& val);
+	complex der_eval(const complex& val) const;
 	
 	// Print the quintic
 	#ifdef GPU_ENABLED
