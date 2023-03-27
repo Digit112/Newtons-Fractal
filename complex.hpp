@@ -119,6 +119,14 @@ public:
 		return dx*dx + dy*dy;
 	}
 	
+	// Lerp between two complex numbers
+	#ifdef GPU_ENABLED
+	__device__ __host__
+	#endif
+	static complex lerp(const complex& a, const complex& b, float t) {
+		return complex(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+	}
+	
 	// Print the complex number.
 	#ifdef GPU_ENABLED
 	__device__ __host__

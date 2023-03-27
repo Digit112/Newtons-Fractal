@@ -14,7 +14,7 @@ int main() {
 	
 	const size_t iters = 20;
 	
-	const size_t frames = 1;
+	const size_t frames = 192;
 	
 	camera cam(width, height, 0, 0, (float) 16 / 3, (float) 9 / 3, iters); // 16:9
 	
@@ -25,13 +25,15 @@ int main() {
 	// Allocate space for the output files' names and headers.
 	char fn[64];
 	
+	cam.cache_paths(roots);
+	
 	for (int f = 0; f < frames; f++) {
 		printf("Frame %d...\n", f);
 		
-		float t = (float) f / frames * 2 * 3.14159;
+		float t = (float) f / frames;
 		
 		// Render
-		cam.render(roots, colors);
+		cam.render_paths(roots, colors, t);
 		
 		// Save to file.
 		sprintf(fn, "./out/%03d.ppm", f);

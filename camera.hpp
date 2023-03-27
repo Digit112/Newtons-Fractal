@@ -9,11 +9,23 @@
 
 class camera;
 
-// Render the scene
+// Render the scene. Iterates the points iters times aand colors the image according to which root the final iteration landed nearest.
 #ifdef GPU_ENABLED
 __global__
 #endif
-void render_CPU_GPU(const camera& cam, const complex* roots, const quintic func, const rgb* color, size_t iters);
+void render_CPU_GPU(const camera& cam, const complex* roots, const quintic func, const rgb* color);
+
+// Iterate points corresponding to the pixels according to Newton's equation and record the values they visit in the camera's paths structure.
+#ifdef GPU_ENABLED
+__global__
+#endif
+void cache_paths_CPU_GPU(const camera& cam, const quintic func);
+
+// Render 
+#ifdef GPU_ENABLED
+__global__
+#endif
+void render_paths_CPU_GPU(const camera& cam, const complex* roots, const rgb* color, float t);
 
 class camera {
 public:
@@ -29,12 +41,25 @@ public:
 	size_t width;
 	size_t height;
 	
+	// The number of iterations to perform.
+	size_t iters;
+	
 	// Output image.
 	uint8_t* img;
 	
-	camera(size_t width, size_t height, float cx, float cy, float cw, float ch);
+	// Paths travelled by points.
+	complex* paths;
 	
-	void render(const complex* roots, const rgb* color, size_t iters, complex mul);
+	camera(size_t width, size_t height, float cx, float cy, float cw, float ch, size_t iters);
+	
+	// Render the scene to the img buffer.
+	void render(const complex* roots, const rgb* color);
+	
+	// Calculate and cache the paths of the points.
+	void cache_paths(const complex* roots);
+	
+	// Interpolate the paths of the points in order 
+	void render_paths(const complex* roots, const rgb* color, float t);
 	
 	// Save the current img to file.
 	void save(const char* fn);
@@ -43,13 +68,19 @@ public:
 };
 
 // Allocate camera
-camera::camera(size_t width, size_t height, float cx, float cy, float cw, float ch) : width(width), height(height), cx(cx), cy(cy), cw(cw), ch(ch) {
+camera::camera(size_t width, size_t height, float cx, float cy, float cw, float ch, size_t iters) : width(width), height(height), cx(cx), cy(cy), cw(cw), ch(ch), iters(iters) {
 	#ifdef GPU_ENABLED
 		cudaError_t err;
 		
 		err = cudaMallocManaged(&img, width*height*3);
 		if (err != cudaSuccess) {
 			printf("Error: Could not allocate requested image: %s\n", cudaGetErrorName(err));
+			exit(1);
+		}
+		
+		err = cudaMallocManaged(&paths, width*height*(iters + 1)*sizeof(complex));
+		if (err != cudaSuccess) {
+			printf("Error: Could not allocate requested path structure: %s\n", cudaGetErrorName(err));
 			exit(1);
 		}
 		
@@ -60,15 +91,21 @@ camera::camera(size_t width, size_t height, float cx, float cy, float cw, float 
 			printf("Error: Could not allocate requested image.\n");
 			exit(1);
 		}
+		
+		paths = new complex[width*height*(iters + 1)];
+		
+		if (paths == NULL) {
+			printf("Error: Could not allocate requested path structure.\n");
+			exit(1);
+		}
 	#endif
 }
 
 // Proxy for the render function so that it can be called as a member function.
 // This function is also called the same way regardles of whether GPU_ENABLED is defined.
-void camera::render(const complex* roots, const rgb* colors, size_t iters, complex mul) {
+void camera::render(const complex* roots, const rgb* colors) {
 	// Generate the quintic.
 	quintic func(roots);
-	func.scale(mul);
 	
 	#ifdef GPU_ENABLED
 		cudaError_t err;
@@ -126,7 +163,7 @@ void camera::render(const complex* roots, const rgb* colors, size_t iters, compl
 		}
 		
 		// Render the scene
-		render_CPU_GPU<<<grid, block>>>(*cam_gpu, roots_gpu, func, colors_gpu, iters);
+		render_CPU_GPU<<<grid, block>>>(*cam_gpu, roots_gpu, func, colors_gpu);
 		err = cudaGetLastError();
 		if (err != cudaSuccess) {
 			printf("Error: Launched Kernel: %s\n", cudaGetErrorName(err));
@@ -139,7 +176,60 @@ void camera::render(const complex* roots, const rgb* colors, size_t iters, compl
 			exit(1);
 		}
 	#else
-		render_CPU_GPU(*this, roots, func, colors, iters);
+		render_CPU_GPU(*this, roots, func, colors);
+	#endif
+}
+
+void camera::cache_paths(const complex* roots) {
+	// Generate the quintic.
+	quintic func(roots);
+	
+	#ifdef GPU_ENABLED
+	#else
+		cache_paths_CPU_GPU(*this, func);
+	#endif
+}
+
+void camera::render_paths(const complex* roots, const rgb* color, float t) {
+	#ifdef GPU_ENABLED
+	#else
+		render_paths_CPU_GPU(*this, roots, color, t);
+	#endif
+}
+
+void camera::save(const char* fn) {
+	FILE* fout = fopen(fn, "wb");
+	if (fout == NULL) {
+		printf("Error: Could not open file '%s'\n", fn);
+		exit(1);
+	}
+	
+	char hdr[64];
+	int hdr_len = sprintf(hdr, "P6 %zu %zu 255 ", width, height);
+	
+	fwrite(hdr, 1, hdr_len, fout);
+	fwrite(img, 1, width*height*3, fout);
+	fclose(fout);
+}
+
+camera::~camera() {
+	#ifdef GPU_ENABLED
+		cudaError_t err;
+		
+		err = cudaFree(img);
+		if (err != cudaSuccess) {
+			printf("Error Freeing image: %s\n", cudaGetErrorName(err));
+			exit(1);
+		}
+		
+		err = cudaFree(paths);
+		if (err != cudaSuccess) {
+			printf("Error Freeing paths structure: %s\n", cudaGetErrorName(err));
+			exit(1);
+		}
+	#else
+		delete[] img;
+		delete[] paths;
 	#endif
 }
 
@@ -147,7 +237,7 @@ void camera::render(const complex* roots, const rgb* colors, size_t iters, compl
 #ifdef GPU_ENABLED
 __global__
 #endif
-void render_CPU_GPU(const camera& cam, const complex* roots, const quintic func, const rgb* color, size_t iters) {
+void render_CPU_GPU(const camera& cam, const complex* roots, const quintic func, const rgb* color) {
 	// Calculate x and y if this is a kernel. Otherwise, use a for loop.
 	#ifdef GPU_ENABLED
 	int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -159,7 +249,7 @@ void render_CPU_GPU(const camera& cam, const complex* roots, const quintic func,
 			complex p = complex((float) x / cam.width * cam.cw - cam.cw/2 + cam.cx, (float) y / cam.height * cam.ch - cam.ch/2 + cam.cy);
 			
 			// Iterate the point with Newton's formula
-			for (int i = 0; i < iters; i++) {
+			for (int i = 0; i < cam.iters; i++) {
 				complex val = func.eval(p);
 				complex der_val = func.der_eval(p);
 				
@@ -193,32 +283,94 @@ void render_CPU_GPU(const camera& cam, const complex* roots, const quintic func,
 	#endif
 }
 
-void camera::save(const char* fn) {
-	FILE* fout = fopen(fn, "wb");
-	if (fout == NULL) {
-		printf("Error: Could not open file '%s'\n", fn);
-		exit(1);
+#ifdef GPU_ENABLED
+__global__
+#endif
+void cache_paths_CPU_GPU(const camera& cam, const quintic func) {
+	// Calculate x and y if this is a kernel. Otherwise, use a for loop.
+	#ifdef GPU_ENABLED
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	#else
+	for (int x = 0; x < cam.width; x++) {
+		for (int y = 0; y < cam.height; y++) {
+	#endif
+			complex p = complex((float) x / cam.width * cam.cw - cam.cw/2 + cam.cx, (float) y / cam.height * cam.ch - cam.ch/2 + cam.cy);
+			
+			int path_ind = (y*cam.width + x)*(cam.iters+1);
+			
+			// Iterate the point with Newton's formula
+			cam.paths[path_ind] = p;
+			for (int i = 0; i < cam.iters; i++) {
+				complex val = func.eval(p);
+				complex der_val = func.der_eval(p);
+				
+				complex diff = val / der_val;
+				
+				//printf("p = (%.2f, %.2f), f(p) = (%.2f, %.2f), f'(p) = (%.2f, %.2f)\n", p.x, p.y, val.x, val.y, der_val.x, der_val.y);
+				p = p - diff;
+				
+				// Record the values visited by this point.
+				cam.paths[path_ind + i + 1] = p;
+			}
+	#ifndef GPU_ENABLED
+		}
 	}
-	
-	char hdr[64];
-	int hdr_len = sprintf(hdr, "P6 %zu %zu 255 ", width, height);
-	
-	fwrite(hdr, 1, hdr_len, fout);
-	fwrite(img, 1, width*height*3, fout);
-	fclose(fout);
+	#endif
 }
 
-camera::~camera() {
+// Render 
+#ifdef GPU_ENABLED
+__global__
+#endif
+void render_paths_CPU_GPU(const camera& cam, const complex* roots, const rgb* color, float t) {		
+	// Allocate space for the bezier calculation
+	complex bezier[cam.iters];
+	
+	// Calculate x and y if this is a kernel. Otherwise, use a for loop.
 	#ifdef GPU_ENABLED
-		cudaError_t err;
-		
-		err = cudaFree(img);
-		if (err != cudaSuccess) {
-			printf("Error Freeing image:%s\n", cudaGetErrorName(err));
-			exit(1);
-		}
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
 	#else
-		delete[] img;
+	for (int x = 0; x < cam.width; x++) {
+		for (int y = 0; y < cam.height; y++) {
+	#endif
+			int path_ind = (y*cam.width + x)*(cam.iters+1);
+			
+			// Perform the first pass of the bezier calculation.
+			for (int i = 0; i < cam.iters; i++) {
+				bezier[i] = complex::lerp(cam.paths[path_ind + i], cam.paths[path_ind + i + 1], t);
+			}
+			
+			// Perform additional passes of the bezier calculation.
+			for (int i = cam.iters - 1; i > 0; i--) {
+				for (int j = 0; j < i; j++) {
+					bezier[j] = complex::lerp(bezier[j], bezier[j + 1], t);
+				}
+			}
+			
+			// Now, God willing, bezier[0] will be the final, interpolated position of our point.
+			
+			// Color the point based on the nearest root.
+			float min_dis = 100;
+			int near_pnt = 0;
+			for (int i = 0; i < 5; i++) {
+				float dis = complex::sqr_dis(bezier[0], roots[i]);
+				
+				if (dis < min_dis) {
+					min_dis = dis;
+					near_pnt = i;
+				}
+			}
+			
+			int ind = (y*cam.width + x) * 3;
+			
+			cam.img[ind  ] = color[near_pnt].r;
+			cam.img[ind+1] = color[near_pnt].g;
+			cam.img[ind+2] = color[near_pnt].b;
+	#ifndef GPU_ENABLED
+		}
+	}
 	#endif
 }
 
