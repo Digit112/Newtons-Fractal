@@ -185,15 +185,101 @@ void camera::cache_paths(const complex* roots) {
 	quintic func(roots);
 	
 	#ifdef GPU_ENABLED
+		cudaError_t err;
+		
+		err = cudaGetLastError();
+		if (err != cudaSuccess) {
+			printf("Error occurred prior to caching: %s\n", cudaGetErrorName(err));
+			exit(1);
+		}
+		
+		dim3 block(16, 16);
+		dim3 grid(width / 16, height / 16);
+		
+		// Copy the camera to the GPU
+		camera* cam_gpu;
+		err = cudaMallocManaged(&cam_gpu, sizeof(camera));
+		if (err != cudaSuccess) {
+			printf("Error: Allocated Scene Descriptor: %s\n", cudaGetErrorName(err));
+			exit(1);
+		}
+		
+		cudaMemcpy(cam_gpu, this, sizeof(camera), cudaMemcpyHostToDevice);
+		err = cudaGetLastError();
+		if (err != cudaSuccess) {
+			printf("Error: Moved Camera to Device: %s\n", cudaGetErrorName(err));
+			exit(1);
+		}
+		
+		cache_paths_CPU_GPU<<<grid, block>>>(*cam_gpu, func);
+		
+		cudaDeviceSynchronize();
 	#else
 		cache_paths_CPU_GPU(*this, func);
 	#endif
 }
 
-void camera::render_paths(const complex* roots, const rgb* color, float t) {
+void camera::render_paths(const complex* roots, const rgb* colors, float t) {
 	#ifdef GPU_ENABLED
+		cudaError_t err;
+		
+		err = cudaGetLastError();
+		if (err != cudaSuccess) {
+			printf("Error occurred prior to path rendering: %s\n", cudaGetErrorName(err));
+			exit(1);
+		}
+		
+		dim3 block(16, 16);
+		dim3 grid(width / 16, height / 16);
+		
+		// Copy the camera to the GPU
+		camera* cam_gpu;
+		err = cudaMallocManaged(&cam_gpu, sizeof(camera));
+		if (err != cudaSuccess) {
+			printf("Error: Allocated Scene Descriptor: %s\n", cudaGetErrorName(err));
+			exit(1);
+		}
+		
+		cudaMemcpy(cam_gpu, this, sizeof(camera), cudaMemcpyHostToDevice);
+		err = cudaGetLastError();
+		if (err != cudaSuccess) {
+			printf("Error: Moved Camera to Device: %s\n", cudaGetErrorName(err));
+			exit(1);
+		}
+		
+		// Copy the roots to the GPU
+		complex* roots_gpu;
+		err = cudaMallocManaged(&roots_gpu, sizeof(complex)*5);
+		if (err != cudaSuccess) {
+			printf("Error: Allocated Roots: %s\n", cudaGetErrorName(err));
+			exit(1);
+		}
+		
+		cudaMemcpy(roots_gpu, roots, sizeof(complex)*5, cudaMemcpyHostToDevice);
+		if (err != cudaSuccess) {
+			printf("Error: Moved Roots to Device: %s\n", cudaGetErrorName(err));
+			exit(1);
+		}
+		
+		// Copy colors to the GPU
+		rgb* colors_gpu;
+		err = cudaMallocManaged(&colors_gpu, sizeof(rgb)*5);
+		if (err != cudaSuccess) {
+			printf("Error: Allocated Colors: %s\n", cudaGetErrorName(err));
+			exit(1);
+		}
+		
+		cudaMemcpy(colors_gpu, colors, sizeof(rgb)*5, cudaMemcpyHostToDevice);
+		if (err != cudaSuccess) {
+			printf("Error: Moved Colors to Device: %s\n", cudaGetErrorName(err));
+			exit(1);
+		}
+		
+		render_paths_CPU_GPU<<<grid, block>>>(*cam_gpu, roots_gpu, colors_gpu, t);
+		
+		cudaDeviceSynchronize();
 	#else
-		render_paths_CPU_GPU(*this, roots, color, t);
+		render_paths_CPU_GPU(*this, roots, colors, t);
 	#endif
 }
 
@@ -325,7 +411,7 @@ __global__
 #endif
 void render_paths_CPU_GPU(const camera& cam, const complex* roots, const rgb* color, float t) {		
 	// Allocate space for the bezier calculation
-	complex bezier[cam.iters];
+	complex* bezier = new complex[cam.iters];
 	
 	// Calculate x and y if this is a kernel. Otherwise, use a for loop.
 	#ifdef GPU_ENABLED
@@ -372,6 +458,8 @@ void render_paths_CPU_GPU(const camera& cam, const complex* roots, const rgb* co
 		}
 	}
 	#endif
+	
+	delete[] bezier;
 }
 
 #endif

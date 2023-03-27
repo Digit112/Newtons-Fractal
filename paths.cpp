@@ -12,7 +12,7 @@ int main() {
 	const size_t width = 2048;
 	const size_t height = 1152;
 	
-	const size_t iters = 20;
+	const size_t iters = 15;
 	
 	const size_t frames = 192;
 	
@@ -31,6 +31,7 @@ int main() {
 		printf("Frame %d...\n", f);
 		
 		float t = (float) f / frames;
+		t = t * t * t; // Makes the rate of change look smoother in the video.
 		
 		// Render
 		cam.render_paths(roots, colors, t);
